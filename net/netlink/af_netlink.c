@@ -55,6 +55,9 @@
 #include <linux/types.h>
 #include <linux/audit.h>
 #include <linux/mutex.h>
+#include <linux/vs_context.h>
+#include <linux/vs_network.h>
+#include <linux/vs_limit.h>
 
 #include <net/net_namespace.h>
 #include <net/sock.h>
@@ -1949,6 +1952,8 @@ static struct sock *netlink_seq_socket_idx(struct seq_file *seq, loff_t pos)
 			sk_for_each(s, node, &hash->table[j]) {
 				if (sock_net(s) != seq_file_net(seq))
 					continue;
+				if (!nx_check(s->sk_nid, VS_WATCH_P | VS_IDENT))
+					continue;
 				if (off == pos) {
 					iter->link = i;
 					iter->hash_idx = j;
@@ -1983,7 +1988,8 @@ static void *netlink_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 	s = v;
 	do {
 		s = sk_next(s);
-	} while (s && sock_net(s) != seq_file_net(seq));
+	} while (s && (sock_net(s) != seq_file_net(seq) ||
+		!nx_check(s->sk_nid, VS_WATCH_P | VS_IDENT)));
 	if (s)
 		return s;
 
@@ -1995,7 +2001,8 @@ static void *netlink_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 
 		for (; j <= hash->mask; j++) {
 			s = sk_head(&hash->table[j]);
-			while (s && sock_net(s) != seq_file_net(seq))
+			while (s && (sock_net(s) != seq_file_net(seq) ||
+				!nx_check(s->sk_nid, VS_WATCH_P | VS_IDENT)))
 				s = sk_next(s);
 			if (s) {
 				iter->link = i;
